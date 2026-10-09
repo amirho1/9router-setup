@@ -6,11 +6,10 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$PROJECT_DIR/.env"
 COMPOSE_FILE="$PROJECT_DIR/docker-compose.yaml"
 
-DOMAIN="9router.web-father.ir"
-WARP_DOMAIN="warp.web-father.ir"
+DOMAIN="aiproxy.web-father.ir"
 
 echo "======================================"
-echo "  9Router Deployment"
+echo "  OmniRoute Deployment"
 echo "======================================"
 echo
 
@@ -65,11 +64,11 @@ if [ "${CURRENT_SWAP:-0}" -eq 0 ]; then
     fi
 
     # Avoid aggressively swapping normal application memory.
-    cat >/etc/sysctl.d/99-9router.conf <<EOF
+    cat >/etc/sysctl.d/99-omniroute.conf <<EOF
 vm.swappiness=10
 EOF
 
-    sysctl -p /etc/sysctl.d/99-9router.conf >/dev/null
+    sysctl -p /etc/sysctl.d/99-omniroute.conf >/dev/null
 
     echo "1 GB swap created."
 else
@@ -87,13 +86,12 @@ if [ ! -f "$ENV_FILE" ]; then
 
     JWT_SECRET="$(openssl rand -hex 64)"
     INITIAL_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)"
-    WARP_PROXY_PASSWORD="$(openssl rand -hex 32)"
 
     cat >"$ENV_FILE" <<EOF
+REQUIRE_API_KEY=true
+NEXT_PUBLIC_BASE_URL=https://${DOMAIN}
 JWT_SECRET=${JWT_SECRET}
 INITIAL_PASSWORD=${INITIAL_PASSWORD}
-WARP_PROXY_USER=warp
-WARP_PROXY_PASSWORD=${WARP_PROXY_PASSWORD}
 EOF
 
     chmod 600 "$ENV_FILE"
@@ -109,20 +107,23 @@ else
     NEW_ENV_CREATED=false
 
     # Preserve every existing value; add only credentials missing from older deployments.
-    if ! grep -q '^WARP_PROXY_USER=' "$ENV_FILE"; then
-        printf '\nWARP_PROXY_USER=warp\n' >>"$ENV_FILE"
+    if ! grep -q '^REQUIRE_API_KEY=' "$ENV_FILE"; then
+        printf '\nREQUIRE_API_KEY=true\n' >>"$ENV_FILE"
     fi
 
-    if ! grep -q '^WARP_PROXY_PASSWORD=' "$ENV_FILE"; then
-        printf '\nWARP_PROXY_PASSWORD=%s\n' "$(openssl rand -hex 32)" >>"$ENV_FILE"
+    if ! grep -q '^NEXT_PUBLIC_BASE_URL=' "$ENV_FILE"; then
+        printf 'NEXT_PUBLIC_BASE_URL=https://%s\n' "$DOMAIN" >>"$ENV_FILE"
+    fi
+
+    if ! grep -q '^JWT_SECRET=' "$ENV_FILE"; then
+        printf 'JWT_SECRET=%s\n' "$(openssl rand -hex 64)" >>"$ENV_FILE"
+    fi
+
+    if ! grep -q '^INITIAL_PASSWORD=' "$ENV_FILE"; then
+        printf 'INITIAL_PASSWORD=%s\n' "$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)" >>"$ENV_FILE"
     fi
 
     chmod 600 "$ENV_FILE"
-fi
-
-if grep -Eq '^WARP_PROXY_(USER|PASSWORD)=$' "$ENV_FILE"; then
-    echo "ERROR: WARP proxy credentials in .env must not be empty."
-    exit 1
 fi
 
 # ---------------------------------------------------------
@@ -136,7 +137,7 @@ echo "Pulling Docker images..."
 docker compose --env-file "$ENV_FILE" pull
 
 echo
-echo "Starting 9Router..."
+echo "Starting OmniRoute..."
 docker compose --env-file "$ENV_FILE" up -d
 
 echo
@@ -146,7 +147,6 @@ echo "======================================"
 echo
 echo "URL:"
 echo "  https://${DOMAIN}"
-echo "  https://${WARP_DOMAIN} (proxy access notice; proxy stays on the Docker network)"
 echo
 
 if [ "$NEW_ENV_CREATED" = true ]; then
@@ -169,8 +169,8 @@ echo
 echo "Useful commands:"
 echo
 echo "  docker compose logs -f"
-echo "  docker compose logs -f 9router"
+echo "  docker compose logs -f omniroute"
+echo "  docker compose logs -f redis"
 echo "  docker compose logs -f caddy"
-echo "  docker compose logs -f warp-proxy"
 echo "  docker stats"
 echo
