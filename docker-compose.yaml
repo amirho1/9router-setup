@@ -28,6 +28,13 @@ services:
       - OMNIROUTE_TRUST_PROXY=true
       - JWT_SECRET=${JWT_SECRET:-}
       - INITIAL_PASSWORD=${INITIAL_PASSWORD:-}
+      - REQUEST_TIMEOUT_MS="300000"
+      - FETCH_TIMEOUT_MS="300000"
+      - FETCH_CONNECT_TIMEOUT_MS="60000"
+      - FETCH_HEADERS_TIMEOUT_MS="300000"
+      - FETCH_BODY_TIMEOUT_MS="300000"
+      - STREAM_IDLE_TIMEOUT_MS="300000"
+      - API_BRIDGE_PROXY_TIMEOUT_MS="300000"
     ports:
       # Loopback-only by default. Override APP_BIND_HOST in .env to expose.
       - "${APP_BIND_HOST:-127.0.0.1}:${DASHBOARD_PORT:-20128}:${DASHBOARD_PORT:-20128}"
@@ -47,39 +54,8 @@ services:
     networks:
       - 9router-network
 
-  caddy:
-    image: caddy:2-alpine
-    container_name: 9router-caddy
-    restart: unless-stopped
-    command:
-      [
-        "caddy",
-        "run",
-        "--config",
-        "/etc/caddy/Caddyfile",
-        "--adapter",
-        "caddyfile",
-      ]
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    mem_limit: 80m
-    mem_reservation: 20m
-    networks:
-      - 9router-network
-    depends_on:
-      omniroute:
-        condition: service_healthy
-
 volumes:
   omniroute-data:
-  caddy-data:
-  caddy-config:
   redis-data:
 
 networks:
